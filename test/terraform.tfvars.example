@@ -1,0 +1,40 @@
+# AWS Configuration
+aws_region = "us-east-1"
+
+# Environment Configuration
+environment = "test"
+
+# Test Configuration
+test_name_prefix = "aurora-test"
+
+# Additional Tags
+tags = {
+  Purpose     = "Testing Aurora Serverless Module"
+  Owner       = "DevOps Team"
+  Environment = "test"
+  Project     = "Aurora Serverless v2 Testing"
+  Terraform   = "true"
+}
+
+# VPC Configuration (optional overrides)
+# vpc_cidr = "10.0.0.0/16"
+# availability_zones = ["us-east-1a", "us-east-1b"]
+# private_subnet_cidrs = ["10.0.1.0/24", "10.0.2.0/24"]
+# public_subnet_cidrs = ["10.0.101.0/24", "10.0.102.0/24"]
+
+# Aurora Serverless v2 Capacity Configuration
+min_capacity = 0.5
+max_capacity = 2.0
+
+# Alternative capacity examples:
+# For development/testing (minimal cost):
+# min_capacity = 0.5
+# max_capacity = 1.0
+
+# For light production workloads:
+# min_capacity = 1.0
+# max_capacity = 4.0
+
+# For heavy production workloads:
+# min_capacity = 2.0
+# max_capacity = 16.0
