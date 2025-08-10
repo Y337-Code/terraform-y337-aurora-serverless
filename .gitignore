@@ -19,6 +19,9 @@ crash.*.log
 *.auto.tfvars
 *.auto.tfvars.json
 
+# Exclude local environment-specific files containing AWS resource IDs
+*.tfvars.local
+
 # Include override files you do wish to add to version control
 # override.tf
 # override.tf.json
@@ -92,3 +95,7 @@ id_rsa*
 id_dsa*
 id_ecdsa*
 id_ed25519*
+
+# Memory bank files (Cline's documentation)
+memory-bank/
+.clinerules
