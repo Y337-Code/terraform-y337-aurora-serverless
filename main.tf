@@ -55,15 +55,27 @@ resource "aws_rds_cluster" "aurora_serverless_v2" {
   engine_mode            = "provisioned"
   engine                 = local.engine
   engine_version         = local.engine_version
-  database_name          = var.database_name
-  master_username        = var.master_username
-  master_password        = var.master_password
+  database_name          = var.snapshot_identifier == null ? var.database_name : null
+  master_username        = var.snapshot_identifier == null ? var.master_username : null
+  master_password        = var.snapshot_identifier == null ? var.master_password : null
   skip_final_snapshot    = var.skip_final_snapshot
   db_subnet_group_name   = var.db_subnet_group_name
   vpc_security_group_ids = var.vpc_security_group_ids
   kms_key_id             = aws_kms_key.aurora_kms_key.arn
   storage_encrypted      = true
   port                   = local.port
+
+  # Snapshot restoration configuration
+  snapshot_identifier = var.snapshot_identifier
+
+  dynamic "restore_to_point_in_time" {
+    for_each = var.restore_to_time != null || var.use_latest_restorable_time ? [1] : []
+    content {
+      restore_type               = var.restore_type
+      restore_to_time           = var.restore_to_time
+      use_latest_restorable_time = var.use_latest_restorable_time
+    }
+  }
 
   serverlessv2_scaling_configuration {
     max_capacity = var.max_capacity

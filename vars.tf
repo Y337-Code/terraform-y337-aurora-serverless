@@ -53,7 +53,7 @@ variable "engine_version" {
 variable "database_name" {
   type        = string
   description = "The name of the database."
-  default     = "auroradevmtrgrm"
+  default     = "auroradevdb"
 }
 
 variable "application" {
@@ -139,6 +139,36 @@ variable "tags" {
   type        = map(string)
   description = "Additional tags to apply to all resources."
   default     = {}
+}
+
+# Snapshot Configuration
+variable "snapshot_identifier" {
+  type        = string
+  description = "The identifier of the snapshot to restore from. If null, creates a new cluster."
+  default     = null
+}
+
+variable "restore_type" {
+  type        = string
+  description = "Type of restore - 'full-copy' or 'copy-on-write'"
+  default     = "full-copy"
+
+  validation {
+    condition     = contains(["full-copy", "copy-on-write"], var.restore_type)
+    error_message = "Restore type must be either 'full-copy' or 'copy-on-write'."
+  }
+}
+
+variable "restore_to_time" {
+  type        = string
+  description = "The time to restore to (for point-in-time recovery). Format: 2023-01-01T12:00:00.000Z"
+  default     = null
+}
+
+variable "use_latest_restorable_time" {
+  type        = bool
+  description = "Whether to restore to the latest restorable time"
+  default     = false
 }
 
 # KMS Configuration
