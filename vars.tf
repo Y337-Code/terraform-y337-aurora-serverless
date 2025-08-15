@@ -172,10 +172,44 @@ variable "use_latest_restorable_time" {
 }
 
 # KMS Configuration
+variable "encryption_type" {
+  type        = string
+  description = "Type of encryption to use. 'customer-managed' (default, FedRAMP/CMMC compliant) or 'aws-managed' (simpler, less secure)"
+  default     = "customer-managed"
+
+  validation {
+    condition     = contains(["customer-managed", "aws-managed"], var.encryption_type)
+    error_message = "Encryption type must be either 'customer-managed' or 'aws-managed'."
+  }
+}
+
+variable "create_kms_key" {
+  type        = bool
+  description = "Whether to create a new customer-managed KMS key. Only relevant when encryption_type is 'customer-managed'."
+  default     = true
+}
+
+variable "kms_key_id" {
+  type        = string
+  description = "ARN of an existing customer-managed KMS key to use. Only relevant when create_kms_key is false."
+  default     = null
+}
+
+variable "kms_key_deletion_window_in_days" {
+  type        = number
+  description = "Number of days to retain the KMS key before permanent deletion (7-30 days). Provides protection against accidental deletion."
+  default     = 7
+
+  validation {
+    condition     = var.kms_key_deletion_window_in_days >= 7 && var.kms_key_deletion_window_in_days <= 30
+    error_message = "KMS key deletion window must be between 7 and 30 days."
+  }
+}
+
 variable "kms_allowed_services" {
   type        = list(string)
   description = "List of AWS services allowed to use the KMS key for Aurora encryption."
-  default     = ["rds.amazonaws.com", "logs.amazonaws.com"]
+  default     = ["rds.amazonaws.com", "logs.amazonaws.com", "backup.amazonaws.com"]
 
   validation {
     condition = alltrue([
@@ -184,4 +218,30 @@ variable "kms_allowed_services" {
     ])
     error_message = "All services must be valid AWS service endpoints (e.g., 'rds.amazonaws.com')."
   }
+}
+
+variable "backup_cross_account_role_arns" {
+  type        = list(string)
+  description = "List of cross-account AWS Backup service role ARNs that need access to decrypt Aurora snapshots for cross-account backup operations."
+  default     = []
+
+  validation {
+    condition = alltrue([
+      for arn in var.backup_cross_account_role_arns :
+      can(regex("^arn:[^:]+:iam::[0-9]{12}:role/.+$", arn))
+    ])
+    error_message = "All ARNs must be valid IAM role ARNs (e.g., 'arn:aws:iam::123456789012:role/BackupRole')."
+  }
+}
+
+variable "enable_backup_service" {
+  type        = bool
+  description = "Whether to allow AWS Backup service to use the KMS key for backup operations."
+  default     = true
+}
+
+variable "kms_multi_region" {
+  type        = bool
+  description = "Whether to create a Multi-Region Key (MRK) for cross-region Aurora operations. Set to true for cross-region snapshot copying, false for single-region use."
+  default     = false
 }

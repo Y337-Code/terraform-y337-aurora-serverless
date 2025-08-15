@@ -38,6 +38,11 @@ locals {
   cloudwatch_logs_exports = local.engine_config.cloudwatch_logs
   port                    = local.engine_config.default_port
 
+  # KMS key selection logic
+  effective_kms_key_id = var.encryption_type == "aws-managed" ? "alias/aws/rds" : (
+    var.create_kms_key ? aws_kms_key.aurora_kms_key[0].arn : var.kms_key_id
+  )
+
   # Common tags
   common_tags = merge(
     {

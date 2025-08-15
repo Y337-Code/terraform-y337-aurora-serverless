@@ -52,12 +52,12 @@ output "aurora_port" {
 
 output "aurora_kms_key_id" {
   description = "KMS key ID used for Aurora encryption"
-  value       = aws_kms_key.aurora_kms_key.key_id
+  value       = length(aws_kms_key.aurora_kms_key) > 0 ? aws_kms_key.aurora_kms_key[0].key_id : null
 }
 
 output "aurora_kms_key_arn" {
   description = "KMS key ARN used for Aurora encryption"
-  value       = aws_kms_key.aurora_kms_key.arn
+  value       = length(aws_kms_key.aurora_kms_key) > 0 ? aws_kms_key.aurora_kms_key[0].arn : null
 }
 
 output "aurora_cluster_instances" {
