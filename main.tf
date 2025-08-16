@@ -90,7 +90,7 @@ resource "aws_kms_key" "aurora_kms_key" {
 }
 
 resource "aws_rds_cluster" "aurora_serverless_v2" {
-  cluster_identifier     = "${var.application}-cluster-${local.env}"
+  cluster_identifier     = "${local.env}-${var.application}-cluster-${random_id.resource_id.hex}"
   engine_mode            = "provisioned"
   engine                 = local.engine
   engine_version         = local.engine_version
@@ -130,14 +130,14 @@ resource "aws_rds_cluster" "aurora_serverless_v2" {
   tags = merge(
     local.common_tags,
     {
-      Name = "${var.application}-${var.engine_type}-cluster-${local.env}"
+      Name = "${local.env}-${var.application}-${var.engine_type}-cluster-${random_id.resource_id.hex}"
     }
   )
 }
 
 resource "aws_rds_cluster_instance" "cluster_instances" {
   count              = var.cluster_count
-  identifier         = "${local.env}-${var.database_name}-cluster-${count.index}"
+  identifier         = "${local.env}-${var.application}-instance-${count.index}-${random_id.resource_id.hex}"
   cluster_identifier = aws_rds_cluster.aurora_serverless_v2.id
   instance_class     = "db.serverless"
   engine             = local.engine
@@ -146,7 +146,7 @@ resource "aws_rds_cluster_instance" "cluster_instances" {
   tags = merge(
     local.common_tags,
     {
-      Name = "${var.application}-${var.engine_type}-instance-${count.index}-${local.env}"
+      Name = "${local.env}-${var.application}-${var.engine_type}-instance-${count.index}-${random_id.resource_id.hex}"
     }
   )
 }

@@ -6,7 +6,7 @@ A Terraform module for deploying AWS Aurora Serverless v2 clusters with support 
 
 ### **FedRAMP & CMMC Compliance**
 
-This module is designed to meet **FedRAMP High** and **CMMC Level 3+** requirements through:
+This module is designed to align with **FedRAMP** and **CMMC+** requirements through:
 
 - **FIPS 140-2 Level 3 Encryption**: Customer-managed KMS keys (default configuration)
 - **Data Sovereignty**: Full control over encryption key lifecycle
@@ -44,7 +44,7 @@ This module is designed to meet **FedRAMP High** and **CMMC Level 3+** requireme
 
 ```hcl
 module "aurora_postgresql" {
-  source = "git::https://github.com/your-org/terraform-y337-aurora-serverless.git?ref=v0.2.0"
+  source = "git::https://github.com/your-org/terraform-y337-aurora-serverless.git?ref=v0.2.1"
 
   # Database configuration
   database_name = "myapp"
@@ -69,7 +69,7 @@ module "aurora_postgresql" {
 
 ```hcl
 module "aurora_mysql" {
-  source = "git::https://github.com/your-org/terraform-y337-aurora-serverless.git?ref=v0.2.0"
+  source = "git::https://github.com/your-org/terraform-y337-aurora-serverless.git?ref=v0.2.1"
 
   # Engine configuration
   engine_type = "mysql"
@@ -97,7 +97,7 @@ module "aurora_mysql" {
 
 ```hcl
 module "aurora_advanced" {
-  source = "git::https://github.com/your-org/terraform-y337-aurora-serverless.git?ref=v0.2.0"
+  source = "git::https://github.com/your-org/terraform-y337-aurora-serverless.git?ref=v0.2.1"
 
   # Engine configuration
   engine_type    = "postgresql"
@@ -313,7 +313,7 @@ The module supports both single-region and multi-region KMS keys for cross-regio
 
 ```hcl
 module "aurora_single_region" {
-  source = "git::https://github.com/your-org/terraform-y337-aurora-serverless.git?ref=v0.2.0"
+  source = "git::https://github.com/your-org/terraform-y337-aurora-serverless.git?ref=v0.2.1"
 
   # Standard single-region configuration (default)
   kms_multi_region = false  # Default
@@ -328,7 +328,7 @@ module "aurora_single_region" {
 
 ```hcl
 module "aurora_multi_region" {
-  source = "git::https://github.com/your-org/terraform-y337-aurora-serverless.git?ref=v0.2.0"
+  source = "git::https://github.com/your-org/terraform-y337-aurora-serverless.git?ref=v0.2.1"
 
   # Enable multi-region KMS key
   kms_multi_region = true
@@ -372,7 +372,7 @@ resource "aws_kms_key" "aurora_mrk" {
 
 # Use external key with Aurora module
 module "aurora_external_mrk" {
-  source = "git::https://github.com/your-org/terraform-y337-aurora-serverless.git?ref=v0.2.0"
+  source = "git::https://github.com/your-org/terraform-y337-aurora-serverless.git?ref=v0.2.1"
 
   encryption_type = "customer-managed"
   create_kms_key  = false
@@ -395,13 +395,130 @@ When using customer-managed keys (default), the KMS key is protected from deleti
 
 This design ensures compliance with data retention requirements and prevents accidental data loss.
 
+### **⚠️ CRITICAL: Destroy Operations and Data Recovery**
+
+**IMPORTANT**: Standard `terraform destroy` will FAIL when using customer-managed KMS keys due to `lifecycle.prevent_destroy` protection.
+
+#### **Data Loss Warning**
+
+🚨 **DESTROYING A CUSTOMER-MANAGED KMS KEY MAKES ALL ENCRYPTED DATA PERMANENTLY UNRECOVERABLE** 🚨
+
+#### **Required Procedures for Database Removal**
+
+**BEFORE removing any Aurora cluster with customer-managed encryption:**
+
+1. **📸 CREATE SNAPSHOTS** - This is MANDATORY for data recovery
+
+   ```bash
+   # Create manual snapshot before any destroy operation
+   aws rds create-db-cluster-snapshot \
+     --db-cluster-identifier your-cluster-name \
+     --db-cluster-snapshot-identifier your-cluster-snapshot-$(date +%Y%m%d%H%M%S) \
+     --region your-region
+   ```
+
+2. **📋 RECORD KMS KEY ARN** - Save this for snapshot restoration
+   ```bash
+   # Get KMS key ARN from terraform outputs
+   terraform output aurora_kms_key_arn
+   # Example: arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012
+   ```
+
+#### **Destroy Options**
+
+**Option 1: Targeted Destroy (Recommended for Testing)**
+
+```bash
+# Destroy Aurora resources while preserving KMS key
+terraform destroy \
+  -target="module.aurora_cluster.aws_rds_cluster_instance.cluster_instances[0]" \
+  -target="module.aurora_cluster.aws_rds_cluster.aurora_serverless_v2" \
+  -target="module.vpc.aws_security_group.aurora_sg" \
+  -target="module.vpc.aws_db_subnet_group.aurora_subnet_group" \
+  -target="module.aurora_cluster.random_id.resource_id" \
+  -auto-approve
+```
+
+**Option 2: Remove KMS Key from State (Production Scenarios)**
+
+```bash
+# 1. Create snapshot first (see above)
+# 2. Record KMS key ARN (see above)
+# 3. Remove KMS key from terraform state
+terraform state rm module.aurora_cluster.aws_kms_key.aurora_kms_key[0]
+
+# 4. Now destroy remaining resources
+terraform destroy
+```
+
+#### **Snapshot Restoration with Preserved KMS Key**
+
+When restoring from snapshots, you MUST specify the original KMS key ARN:
+
+```hcl
+module "aurora_restored" {
+  source = "git::https://github.com/your-org/terraform-y337-aurora-serverless.git?ref=v0.2.1"
+
+  # Restoration configuration
+  snapshot_identifier = "your-cluster-snapshot-20240815120000"
+
+  # CRITICAL: Use the SAME KMS key ARN from original cluster
+  encryption_type = "customer-managed"
+  create_kms_key  = false
+  kms_key_id     = "arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012"
+
+  # Other configuration matching original setup...
+  database_name = "restored_db"
+  application   = "my-application"
+}
+```
+
+#### **Emergency Recovery Scenarios**
+
+**If KMS key is accidentally deleted:**
+
+- ❌ **All encrypted data is permanently lost**
+- ❌ **Snapshots become unrecoverable**
+- ❌ **No recovery options available**
+
+**If terraform state is lost but KMS key exists:**
+
+- ✅ **Import existing KMS key into new terraform state**
+- ✅ **Snapshots remain recoverable**
+- ✅ **Data can be restored**
+
+#### **Production Best Practices**
+
+1. **Automated Snapshots**: Configure automated snapshots with appropriate retention
+2. **KMS Key Backup**: Document KMS key ARNs in your infrastructure inventory
+3. **Cross-Region Snapshots**: Copy snapshots to other regions for disaster recovery
+4. **Testing**: Regularly test snapshot restoration procedures
+5. **State Management**: Use remote state with versioning and backup
+
+```hcl
+# Example: Enhanced backup configuration
+module "aurora_production" {
+  source = "git::https://github.com/your-org/terraform-y337-aurora-serverless.git?ref=v0.2.1"
+
+  # Enhanced backup settings
+  backup_retention_period = 30  # 30 days retention
+  skip_final_snapshot    = false # Always create final snapshot
+  deletion_protection    = true  # Prevent accidental deletion
+
+  # Multi-region key for cross-region snapshot copying
+  kms_multi_region = true
+
+  # Other configuration...
+}
+```
+
 ### **Key Configuration Examples**
 
 #### Customer-Managed Key (Default - FedRAMP/CMMC Compliant)
 
 ```hcl
 module "aurora_compliant" {
-  source = "git::https://github.com/your-org/terraform-y337-aurora-serverless.git?ref=v0.2.0"
+  source = "git::https://github.com/your-org/terraform-y337-aurora-serverless.git?ref=v0.2.1"
 
   # Encryption configuration (defaults)
   encryption_type = "customer-managed"  # Default
@@ -418,7 +535,7 @@ module "aurora_compliant" {
 
 ```hcl
 module "aurora_existing_key" {
-  source = "git::https://github.com/your-org/terraform-y337-aurora-serverless.git?ref=v0.2.0"
+  source = "git::https://github.com/your-org/terraform-y337-aurora-serverless.git?ref=v0.2.1"
 
   # Use existing key
   encryption_type = "customer-managed"
@@ -434,7 +551,7 @@ module "aurora_existing_key" {
 
 ```hcl
 module "aurora_dev" {
-  source = "git::https://github.com/your-org/terraform-y337-aurora-serverless.git?ref=v0.2.0"
+  source = "git::https://github.com/your-org/terraform-y337-aurora-serverless.git?ref=v0.2.1"
 
   # Use AWS managed key (simpler, less secure)
   encryption_type = "aws-managed"
@@ -449,7 +566,7 @@ module "aurora_dev" {
 
 ```hcl
 module "aurora_cross_account_backup" {
-  source = "git::https://github.com/your-org/terraform-y337-aurora-serverless.git?ref=v0.2.0"
+  source = "git::https://github.com/your-org/terraform-y337-aurora-serverless.git?ref=v0.2.1"
 
   # Enable cross-account backup support
   backup_cross_account_role_arns = [
