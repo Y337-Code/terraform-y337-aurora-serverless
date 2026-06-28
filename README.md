@@ -28,6 +28,7 @@ This module is designed to align with **FedRAMP** and **CMMC+** requirements thr
 - **Aurora Serverless v2**: Automatic scaling with configurable capacity limits
 - **KMS Encryption**: Customer-managed KMS keys for data encryption
 - **CloudWatch Logs**: Engine-specific log exports
+- **Optional Parameter Groups**: Custom cluster and instance parameter groups when database tuning is required
 - **Flexible Configuration**: Comprehensive variable support
 - **Production Ready**: Includes backup, maintenance windows, and security best practices
 
@@ -44,7 +45,7 @@ This module is designed to align with **FedRAMP** and **CMMC+** requirements thr
 
 ```hcl
 module "aurora_postgresql" {
-  source = "git::https://github.com/your-org/terraform-y337-aurora-serverless.git?ref=v0.2.1"
+  source = "git::https://github.com/Y337-Code/terraform-y337-aurora-serverless.git?ref=v0.3.0"
 
   # Database configuration
   database_name = "myapp"
@@ -57,7 +58,7 @@ module "aurora_postgresql" {
 
   # Authentication
   master_username = "dbadmin"
-  master_password = "SecurePassword123!"
+  master_password = var.db_password
 
   # Scaling configuration
   min_capacity = 0.5
@@ -69,7 +70,7 @@ module "aurora_postgresql" {
 
 ```hcl
 module "aurora_mysql" {
-  source = "git::https://github.com/your-org/terraform-y337-aurora-serverless.git?ref=v0.2.1"
+  source = "git::https://github.com/Y337-Code/terraform-y337-aurora-serverless.git?ref=v0.3.0"
 
   # Engine configuration
   engine_type = "mysql"
@@ -85,7 +86,7 @@ module "aurora_mysql" {
 
   # Authentication
   master_username = "dbadmin"
-  master_password = "SecurePassword123!"
+  master_password = var.db_password
 
   # Scaling configuration
   min_capacity = 0.5
@@ -97,7 +98,7 @@ module "aurora_mysql" {
 
 ```hcl
 module "aurora_advanced" {
-  source = "git::https://github.com/your-org/terraform-y337-aurora-serverless.git?ref=v0.2.1"
+  source = "git::https://github.com/Y337-Code/terraform-y337-aurora-serverless.git?ref=v0.3.0"
 
   # Engine configuration
   engine_type    = "postgresql"
@@ -145,19 +146,67 @@ module "aurora_advanced" {
 }
 ```
 
+### Optional Parameter Groups
+
+Custom DB cluster and DB instance parameter groups are optional and disabled by default. When they are not enabled, the Aurora cluster and instances use the AWS-managed default parameter groups for the selected engine.
+
+Enable custom parameter groups only when you need to tune Aurora engine settings:
+
+```hcl
+module "aurora_with_parameter_groups" {
+  source = "git::https://github.com/Y337-Code/terraform-y337-aurora-serverless.git?ref=v0.3.0"
+
+  engine_type = "postgresql"
+
+  database_name = "myapp"
+  application   = "my-application"
+  environment   = "production"
+
+  db_subnet_group_name   = "my-db-subnet-group"
+  vpc_security_group_ids = ["sg-12345678"]
+
+  master_username = "dbadmin"
+  master_password = var.db_password
+
+  create_cluster_parameter_group = true
+  cluster_parameters = [
+    {
+      name         = "rds.force_ssl"
+      value        = "1"
+      apply_method = "immediate"
+    }
+  ]
+
+  create_db_parameter_group = true
+  db_parameters = [
+    {
+      name         = "log_min_duration_statement"
+      value        = "1000"
+      apply_method = "immediate"
+    }
+  ]
+
+  # Optional. If omitted, the module selects a default family based on engine_type:
+  # postgresql -> aurora-postgresql15, mysql -> aurora-mysql8.0
+  parameter_group_family = "aurora-postgresql15"
+}
+```
+
+Each parameter supports `name`, `value`, and an optional `apply_method`. Valid `apply_method` values are `immediate` and `pending-reboot`; if omitted, `immediate` is used.
+
 ## Requirements
 
 | Name      | Version |
 | --------- | ------- |
 | terraform | >= 1.0  |
-| aws       | >= 5.26 |
+| aws       | >= 6.0.0 |
 | random    | >= 3.5  |
 
 ## Providers
 
 | Name   | Version |
 | ------ | ------- |
-| aws    | >= 5.26 |
+| aws    | >= 6.0.0 |
 | random | >= 3.5  |
 
 ## Inputs
@@ -168,8 +217,12 @@ module "aurora_advanced" {
 | backup_cross_account_role_arns  | List of cross-account AWS Backup role ARNs for cross-account backup operations      | `list(string)` | `[]`                                                                  |    no    |
 | backup_retention_period         | The backup retention period in days                                                 | `number`       | `7`                                                                   |    no    |
 | cluster_count                   | The number of Aurora Serverless v2 cluster instances to create                      | `number`       | `2`                                                                   |    no    |
+| cluster_parameters              | List of DB cluster parameters to set when creating a custom cluster parameter group  | `list(object)` | `[]`                                                                  |    no    |
+| create_cluster_parameter_group  | Whether to create a custom DB cluster parameter group                               | `bool`         | `false`                                                               |    no    |
+| create_db_parameter_group       | Whether to create a custom DB instance-level parameter group                        | `bool`         | `false`                                                               |    no    |
 | create_kms_key                  | Whether to create a new customer-managed KMS key                                    | `bool`         | `true`                                                                |    no    |
 | database_name                   | The name of the database                                                            | `string`       | `"auroradevdb"`                                                       |    no    |
+| db_parameters                   | List of instance-level DB parameters to set when creating a custom DB parameter group | `list(object)` | `[]`                                                                  |    no    |
 | db_subnet_group_name            | The name of the DB subnet group                                                     | `string`       | `"app_db_subnet_group"`                                               |    no    |
 | deletion_protection             | If the DB cluster should have deletion protection enabled                           | `bool`         | `false`                                                               |    no    |
 | enable_backup_service           | Whether to allow AWS Backup service to use the KMS key                              | `bool`         | `true`                                                                |    no    |
@@ -185,6 +238,7 @@ module "aurora_advanced" {
 | master_username                 | The master username for the database                                                | `string`       | `"yourusername"`                                                      |    no    |
 | max_capacity                    | The maximum capacity for the Aurora Serverless v2 cluster                           | `number`       | `16.0`                                                                |    no    |
 | min_capacity                    | The minimum capacity for the Aurora Serverless v2 cluster                           | `number`       | `2.0`                                                                 |    no    |
+| parameter_group_family          | The DB parameter group family. If null, a default is selected based on engine_type  | `string`       | `null`                                                                |    no    |
 | preferred_backup_window         | The daily time range during which automated backups are created                     | `string`       | `"03:00-04:00"`                                                       |    no    |
 | preferred_maintenance_window    | The weekly time range during which system maintenance can occur                     | `string`       | `"sun:04:30-sun:08:00"`                                               |    no    |
 | skip_final_snapshot             | Determines whether a final DB snapshot is created before the DB cluster is deleted  | `bool`         | `true`                                                                |    no    |
@@ -193,29 +247,32 @@ module "aurora_advanced" {
 
 ## Outputs
 
-| Name                     | Description                            |
-| ------------------------ | -------------------------------------- |
-| aurora_cluster_arn       | Aurora cluster ARN                     |
-| aurora_cluster_id        | Aurora cluster identifier              |
-| aurora_cluster_instances | Aurora cluster instance identifiers    |
-| aurora_database_name     | Aurora database name                   |
-| aurora_endpoint          | Aurora cluster endpoint                |
-| aurora_engine            | Aurora database engine                 |
-| aurora_engine_version    | Aurora database engine version         |
-| aurora_kms_key_arn       | KMS key ARN used for Aurora encryption |
-| aurora_kms_key_id        | KMS key ID used for Aurora encryption  |
-| aurora_master_password   | Aurora cluster master password         |
-| aurora_master_username   | Aurora cluster master username         |
-| aurora_port              | Aurora database port                   |
-| aurora_reader_endpoint   | Aurora cluster reader endpoint         |
+| Name                                | Description                                                                        |
+| ----------------------------------- | ---------------------------------------------------------------------------------- |
+| aurora_cluster_arn                  | Aurora cluster ARN                                                                 |
+| aurora_cluster_id                   | Aurora cluster identifier                                                          |
+| aurora_cluster_instances            | Aurora cluster instance identifiers                                                |
+| aurora_cluster_parameter_group_name | Name of the custom DB cluster parameter group, or null when the engine default is used |
+| aurora_database_name                | Aurora database name                                                               |
+| aurora_db_parameter_group_name      | Name of the custom DB instance parameter group, or null when the engine default is used |
+| aurora_endpoint                     | Aurora cluster endpoint                                                            |
+| aurora_engine                       | Aurora database engine                                                             |
+| aurora_engine_version               | Aurora database engine version                                                     |
+| aurora_kms_key_arn                  | KMS key ARN used for Aurora encryption                                             |
+| aurora_kms_key_id                   | KMS key ID used for Aurora encryption                                              |
+| aurora_master_password              | Aurora cluster master password                                                     |
+| aurora_master_username              | Aurora cluster master username                                                     |
+| aurora_port                         | Aurora database port                                                               |
+| aurora_reader_endpoint              | Aurora cluster reader endpoint                                                     |
 
 ## Version Compatibility
 
-### v0.1.0 (PostgreSQL Only)
+### v0.3.0 (Parameter Groups)
 
-- Original PostgreSQL-only implementation
-- Use this version for existing deployments
-- No breaking changes planned
+- Adds optional custom DB cluster parameter groups
+- Adds optional custom DB instance parameter groups
+- Keeps AWS-managed default parameter groups when custom groups are not enabled
+- No breaking changes from v0.2.x
 
 ### v0.2.0+ (Multi-Engine)
 
@@ -224,25 +281,28 @@ module "aurora_advanced" {
 - Clean variable structure
 - Enhanced outputs and documentation
 
+### v0.1.0 (PostgreSQL Only)
+
+- Original PostgreSQL-only implementation
+- Use this version for existing deployments
+- No breaking changes planned
+
 ## Testing
 
-A comprehensive test environment is included in the `test/` directory:
+This module was validated with OpenTofu and Terraform-compatible provider constraints.
+
+| Tool/Provider  | Tested Version |
+| -------------- | -------------- |
+| OpenTofu       | 1.12.3         |
+| AWS provider   | 6.0.0          |
+| Random provider | 3.7.2         |
+
+Basic validation workflow:
 
 ```bash
-cd test
-cp terraform.tfvars.example terraform.tfvars
-terraform init
-terraform plan
-terraform apply
+tofu init
+tofu validate
 ```
-
-The test environment creates:
-
-- Complete VPC with networking
-- Both PostgreSQL and MySQL Aurora clusters
-- All necessary security groups and subnet groups
-
-See [test/README.md](test/README.md) for detailed testing instructions.
 
 ## Examples
 
@@ -313,7 +373,7 @@ The module supports both single-region and multi-region KMS keys for cross-regio
 
 ```hcl
 module "aurora_single_region" {
-  source = "git::https://github.com/your-org/terraform-y337-aurora-serverless.git?ref=v0.2.1"
+  source = "git::https://github.com/Y337-Code/terraform-y337-aurora-serverless.git?ref=v0.3.0"
 
   # Standard single-region configuration (default)
   kms_multi_region = false  # Default
@@ -328,7 +388,7 @@ module "aurora_single_region" {
 
 ```hcl
 module "aurora_multi_region" {
-  source = "git::https://github.com/your-org/terraform-y337-aurora-serverless.git?ref=v0.2.1"
+  source = "git::https://github.com/Y337-Code/terraform-y337-aurora-serverless.git?ref=v0.3.0"
 
   # Enable multi-region KMS key
   kms_multi_region = true
@@ -355,7 +415,7 @@ module "aurora_multi_region" {
 
 ### **External KMS Key Integration**
 
-For existing KMS key infrastructure, reference the `test/external-kms-key/` example:
+For existing KMS key infrastructure, create a compatible KMS key policy and pass the key ARN to the module:
 
 ```hcl
 # Create your own multi-region KMS key
@@ -366,13 +426,13 @@ resource "aws_kms_key" "aurora_mrk" {
 
   # Use same policy as module's internal key
   policy = jsonencode({
-    # ... complete policy from test/external-kms-key/main.tf
+    # ... include statements that allow the account root and required AWS services
   })
 }
 
 # Use external key with Aurora module
 module "aurora_external_mrk" {
-  source = "git::https://github.com/your-org/terraform-y337-aurora-serverless.git?ref=v0.2.1"
+  source = "git::https://github.com/Y337-Code/terraform-y337-aurora-serverless.git?ref=v0.3.0"
 
   encryption_type = "customer-managed"
   create_kms_key  = false
@@ -457,7 +517,7 @@ When restoring from snapshots, you MUST specify the original KMS key ARN:
 
 ```hcl
 module "aurora_restored" {
-  source = "git::https://github.com/your-org/terraform-y337-aurora-serverless.git?ref=v0.2.1"
+  source = "git::https://github.com/Y337-Code/terraform-y337-aurora-serverless.git?ref=v0.3.0"
 
   # Restoration configuration
   snapshot_identifier = "your-cluster-snapshot-20240815120000"
@@ -498,7 +558,7 @@ module "aurora_restored" {
 ```hcl
 # Example: Enhanced backup configuration
 module "aurora_production" {
-  source = "git::https://github.com/your-org/terraform-y337-aurora-serverless.git?ref=v0.2.1"
+  source = "git::https://github.com/Y337-Code/terraform-y337-aurora-serverless.git?ref=v0.3.0"
 
   # Enhanced backup settings
   backup_retention_period = 30  # 30 days retention
@@ -518,7 +578,7 @@ module "aurora_production" {
 
 ```hcl
 module "aurora_compliant" {
-  source = "git::https://github.com/your-org/terraform-y337-aurora-serverless.git?ref=v0.2.1"
+  source = "git::https://github.com/Y337-Code/terraform-y337-aurora-serverless.git?ref=v0.3.0"
 
   # Encryption configuration (defaults)
   encryption_type = "customer-managed"  # Default
@@ -535,7 +595,7 @@ module "aurora_compliant" {
 
 ```hcl
 module "aurora_existing_key" {
-  source = "git::https://github.com/your-org/terraform-y337-aurora-serverless.git?ref=v0.2.1"
+  source = "git::https://github.com/Y337-Code/terraform-y337-aurora-serverless.git?ref=v0.3.0"
 
   # Use existing key
   encryption_type = "customer-managed"
@@ -551,7 +611,7 @@ module "aurora_existing_key" {
 
 ```hcl
 module "aurora_dev" {
-  source = "git::https://github.com/your-org/terraform-y337-aurora-serverless.git?ref=v0.2.1"
+  source = "git::https://github.com/Y337-Code/terraform-y337-aurora-serverless.git?ref=v0.3.0"
 
   # Use AWS managed key (simpler, less secure)
   encryption_type = "aws-managed"
@@ -566,7 +626,7 @@ module "aurora_dev" {
 
 ```hcl
 module "aurora_cross_account_backup" {
-  source = "git::https://github.com/your-org/terraform-y337-aurora-serverless.git?ref=v0.2.1"
+  source = "git::https://github.com/Y337-Code/terraform-y337-aurora-serverless.git?ref=v0.3.0"
 
   # Enable cross-account backup support
   backup_cross_account_role_arns = [
@@ -642,7 +702,7 @@ For organizations using centralized backup accounts or cross-account backup stra
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Add tests in the `test/` directory
+4. Add validation coverage for any new behavior
 5. Submit a pull request
 
 ## License

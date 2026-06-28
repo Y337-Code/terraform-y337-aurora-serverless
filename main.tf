@@ -41,7 +41,7 @@ resource "aws_kms_key" "aurora_kms_key" {
         Condition = {
           StringEquals = {
             "kms:ViaService" = [
-              for service in (var.enable_backup_service ? var.kms_allowed_services : [
+              for service in(var.enable_backup_service ? var.kms_allowed_services : [
                 for service in var.kms_allowed_services :
                 service if service != "backup.amazonaws.com"
               ]) :
@@ -50,7 +50,7 @@ resource "aws_kms_key" "aurora_kms_key" {
           }
         }
       }
-    ], length(var.backup_cross_account_role_arns) > 0 ? [
+      ], length(var.backup_cross_account_role_arns) > 0 ? [
       {
         Sid    = "Allow Cross-Account Backup Access"
         Effect = "Allow"
@@ -89,6 +89,60 @@ resource "aws_kms_key" "aurora_kms_key" {
   )
 }
 
+resource "aws_rds_cluster_parameter_group" "this" {
+  count       = var.create_cluster_parameter_group ? 1 : 0
+  name_prefix = "${local.env}-${var.application}-cluster-pg-"
+  family      = local.parameter_group_family
+  description = "Custom cluster parameter group for ${local.env}-${var.application}"
+
+  dynamic "parameter" {
+    for_each = var.cluster_parameters
+    content {
+      name         = parameter.value.name
+      value        = parameter.value.value
+      apply_method = parameter.value.apply_method
+    }
+  }
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "${local.env}-${var.application}-${var.engine_type}-cluster-pg-${random_id.resource_id.hex}"
+    }
+  )
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_db_parameter_group" "this" {
+  count       = var.create_db_parameter_group ? 1 : 0
+  name_prefix = "${local.env}-${var.application}-db-pg-"
+  family      = local.parameter_group_family
+  description = "Custom DB instance parameter group for ${local.env}-${var.application}"
+
+  dynamic "parameter" {
+    for_each = var.db_parameters
+    content {
+      name         = parameter.value.name
+      value        = parameter.value.value
+      apply_method = parameter.value.apply_method
+    }
+  }
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "${local.env}-${var.application}-${var.engine_type}-db-pg-${random_id.resource_id.hex}"
+    }
+  )
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
 resource "aws_rds_cluster" "aurora_serverless_v2" {
   cluster_identifier     = "${local.env}-${var.application}-cluster-${random_id.resource_id.hex}"
   engine_mode            = "provisioned"
@@ -104,6 +158,8 @@ resource "aws_rds_cluster" "aurora_serverless_v2" {
   storage_encrypted      = true
   port                   = local.port
 
+  db_cluster_parameter_group_name = var.create_cluster_parameter_group ? aws_rds_cluster_parameter_group.this[0].name : null
+
   # Snapshot restoration configuration
   snapshot_identifier = var.snapshot_identifier
 
@@ -111,7 +167,7 @@ resource "aws_rds_cluster" "aurora_serverless_v2" {
     for_each = var.restore_to_time != null || var.use_latest_restorable_time ? [1] : []
     content {
       restore_type               = var.restore_type
-      restore_to_time           = var.restore_to_time
+      restore_to_time            = var.restore_to_time
       use_latest_restorable_time = var.use_latest_restorable_time
     }
   }
@@ -142,6 +198,8 @@ resource "aws_rds_cluster_instance" "cluster_instances" {
   instance_class     = "db.serverless"
   engine             = local.engine
   engine_version     = local.engine_version
+
+  db_parameter_group_name = var.create_db_parameter_group ? aws_db_parameter_group.this[0].name : null
 
   tags = merge(
     local.common_tags,

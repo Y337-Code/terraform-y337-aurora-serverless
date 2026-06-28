@@ -13,21 +13,23 @@ locals {
   env        = terraform.workspace
   partition  = data.aws_partition.current.partition
   account_id = data.aws_caller_identity.current.account_id
-  region     = data.aws_region.current.name
+  region     = data.aws_region.current.region
 
   # Engine-specific configurations
   engine_configs = {
     postgresql = {
-      engine          = "aurora-postgresql"
-      default_version = "15.4"
-      cloudwatch_logs = ["postgresql"]
-      default_port    = 5432
+      engine                 = "aurora-postgresql"
+      default_version        = "15.4"
+      cloudwatch_logs        = ["postgresql"]
+      default_port           = 5432
+      parameter_group_family = "aurora-postgresql15"
     }
     mysql = {
-      engine          = "aurora-mysql"
-      default_version = "8.0.mysql_aurora.3.04.0"
-      cloudwatch_logs = ["audit", "error", "general", "slowquery"]
-      default_port    = 3306
+      engine                 = "aurora-mysql"
+      default_version        = "8.0.mysql_aurora.3.04.0"
+      cloudwatch_logs        = ["audit", "error", "general", "slowquery"]
+      default_port           = 3306
+      parameter_group_family = "aurora-mysql8.0"
     }
   }
 
@@ -38,8 +40,11 @@ locals {
   cloudwatch_logs_exports = local.engine_config.cloudwatch_logs
   port                    = local.engine_config.default_port
 
+  # Parameter group family (override via var.parameter_group_family, else engine default)
+  parameter_group_family = var.parameter_group_family != null ? var.parameter_group_family : local.engine_config.parameter_group_family
+
   # KMS key selection logic
-  effective_kms_key_id = var.encryption_type == "aws-managed" ? "alias/aws/rds" : (
+  effective_kms_key_id = var.encryption_type == "aws-managed" ? null : (
     var.create_kms_key ? aws_kms_key.aurora_kms_key[0].arn : var.kms_key_id
   )
 

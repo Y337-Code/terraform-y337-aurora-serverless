@@ -141,6 +141,61 @@ variable "tags" {
   default     = {}
 }
 
+# Parameter Group Configuration
+variable "create_cluster_parameter_group" {
+  type        = bool
+  description = "Whether to create a custom DB cluster parameter group. When false, the cluster uses the engine's default cluster parameter group."
+  default     = false
+}
+
+variable "cluster_parameters" {
+  type = list(object({
+    name         = string
+    value        = string
+    apply_method = optional(string, "immediate")
+  }))
+  description = "List of DB cluster parameters to set. Only applied when create_cluster_parameter_group is true. apply_method is 'immediate' or 'pending-reboot'."
+  default     = []
+
+  validation {
+    condition = alltrue([
+      for p in var.cluster_parameters :
+      contains(["immediate", "pending-reboot"], p.apply_method)
+    ])
+    error_message = "apply_method must be either 'immediate' or 'pending-reboot'."
+  }
+}
+
+variable "create_db_parameter_group" {
+  type        = bool
+  description = "Whether to create a custom DB (instance-level) parameter group. When false, instances use the engine's default DB parameter group."
+  default     = false
+}
+
+variable "db_parameters" {
+  type = list(object({
+    name         = string
+    value        = string
+    apply_method = optional(string, "immediate")
+  }))
+  description = "List of instance-level DB parameters to set. Only applied when create_db_parameter_group is true. apply_method is 'immediate' or 'pending-reboot'."
+  default     = []
+
+  validation {
+    condition = alltrue([
+      for p in var.db_parameters :
+      contains(["immediate", "pending-reboot"], p.apply_method)
+    ])
+    error_message = "apply_method must be either 'immediate' or 'pending-reboot'."
+  }
+}
+
+variable "parameter_group_family" {
+  type        = string
+  description = "The DB parameter group family (e.g., 'aurora-postgresql15', 'aurora-mysql8.0'). If null, a default is selected based on engine_type."
+  default     = null
+}
+
 # Snapshot Configuration
 variable "snapshot_identifier" {
   type        = string

@@ -99,3 +99,7 @@ id_ed25519*
 # Memory bank files (Cline's documentation)
 memory-bank/
 .clinerules
+
+# Local agent and backlog notes
+.opencode/
+stories/

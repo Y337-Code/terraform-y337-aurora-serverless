@@ -60,6 +60,16 @@ output "aurora_kms_key_arn" {
   value       = length(aws_kms_key.aurora_kms_key) > 0 ? aws_kms_key.aurora_kms_key[0].arn : null
 }
 
+output "aurora_cluster_parameter_group_name" {
+  description = "Name of the custom DB cluster parameter group, or null when the engine default is used"
+  value       = var.create_cluster_parameter_group ? aws_rds_cluster_parameter_group.this[0].name : null
+}
+
+output "aurora_db_parameter_group_name" {
+  description = "Name of the custom DB instance parameter group, or null when the engine default is used"
+  value       = var.create_db_parameter_group ? aws_db_parameter_group.this[0].name : null
+}
+
 output "aurora_cluster_instances" {
   description = "Aurora cluster instance identifiers"
   value       = aws_rds_cluster_instance.cluster_instances[*].identifier
